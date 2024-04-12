@@ -1,0 +1,14 @@
+name: triopullenv
+channels:
+  - bioconda
+  - conda-forge
+  - r
+  - defaults
+dependencies:
+  - minimap2
+  - samtools
+  - bcftools
+  - hifiasm
+  - yak
+  - gfatools
+  - snakemake

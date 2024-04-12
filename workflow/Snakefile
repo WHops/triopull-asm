@@ -1,0 +1,186 @@
+configfile: "config/Snake.config.json"
+
+# Dictionary to map individual roles to their BAM files
+BAM_FILES = {
+    "mother": config["mother_bam"],
+    "father": config["father_bam"],
+    "child": config["child_bam"],
+}
+
+INTERVAL = config["interval"]
+
+def extract_interval(wildcards):
+    chrname, start_end = wildcards.interval.split(":")
+    start, end = start_end.split("-")
+    return chrname, start, end
+
+
+rule all:
+    input:
+        expand(
+            "res/hifiasm/bams/{interval}_{individual}_h{hap}.bam.bai",
+            interval=INTERVALS,
+            individual=["mother", "father", "child"],
+            hap=[1, 2],
+        ),
+
+
+rule pull_relevant_reads_simple:
+    output:
+        pulled_reads_bam="res/pulled_reads_bam/{interval}_{individual}.bam",
+        pulled_reads_fastq="res/pulled_reads_fastq/{interval}_{individual}.fastq",
+    log:
+        "logs/pull_relevant_reads_simple/{interval}_{individual}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        individual_bam=lambda wildcards: BAM_FILES[wildcards.individual],
+        chrname=lambda wildcards: extract_interval(wildcards)[0],
+        start=lambda wildcards: extract_interval(wildcards)[1],
+        end=lambda wildcards: extract_interval(wildcards)[2],
+    shell:
+        """
+        samtools view -b {params.individual_bam} {params.chrname}:{params.start}-{params.end} > {output.pulled_reads_bam}
+        samtools fastq {output.pulled_reads_bam} > {output.pulled_reads_fastq}
+        """
+
+
+rule assemble_child_trio:
+    input:
+        reads="res/pulled_reads_fastq/{interval}_child.fastq",
+        mother_yak="res/parent_yaks/{interval}_mother.yak",
+        father_yak="res/parent_yaks/{interval}_father.yak",
+    output:
+        "res/hifiasm/{interval}_child_asm_completed.txt",
+    log:
+        "logs/assemble_child_trio/{interval}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        prefix="res/hifiasm/{interval}_child",
+        threads=4,
+    shell:
+        """
+        hifiasm -o {params.prefix} -t {params.threads} -D 50 -N 200 -l 1 -1 {input.mother_yak} -2 {input.father_yak} {input.reads}
+        touch {output}
+        """
+
+
+rule assemble_parent_single:
+    input:
+        reads="res/pulled_reads_fastq/{interval}_{parent}.fastq",
+        h1_reads="res/readlists_parents/{interval}_{parent}_h1.txt",
+        h2_reads="res/readlists_parents/{interval}_{parent}_h2.txt",
+    output:
+        "res/hifiasm/{interval}_{parent}_asm_completed.txt",
+    log:
+        "logs/assemble_parent_single/{interval}_{parent}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        prefix="res/hifiasm/{interval}_{parent}",
+        threads=4,
+    wildcard_constraints:
+        parent="mother|father",
+    shell:
+        """
+        hifiasm -o {params.prefix} -t {params.threads} -3 {input.h1_reads} -4 {input.h2_reads} -D 50 -N 200 {input.reads}
+        touch {output}
+        """
+
+
+rule get_yak:
+    input:
+        parental_fastq="res/pulled_reads_fastq/{interval}_{individual}.fastq",
+    output:
+        "res/parent_yaks/{interval}_{individual}.yak",
+    log:
+        "logs/get_yak/{interval}_{individual}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        threads=4,
+    shell:
+        """
+        yak count -o {output} -t {params.threads} {input.parental_fastq}
+        """
+
+
+rule gfa_to_fa:
+    input:
+        "res/hifiasm/{interval}_{individual}_asm_completed.txt",
+    output:
+        fa="res/hifiasm/fastas/{interval}_{individual}_h{hap}.fa",
+    log:
+        "logs/gfa_to_fa/{interval}_{individual}_h{hap}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        gfa_path=lambda wildcards: expand(
+            "res/hifiasm/{interval}_{individual}.{mode}.hap{hap}.p_ctg.gfa",
+            hap=wildcards.hap,
+            interval=wildcards.interval,
+            individual=wildcards.individual,
+            mode=("dip" if wildcards.individual == "child" else "dip"),
+        ),
+    shell:
+        """
+        gfatools gfa2fa {params.gfa_path[0]} > {output.fa}
+        """
+
+
+rule map_back_to_ref:
+    input:
+        asm_fa="res/hifiasm/fastas/{interval}_{individual}_h{hap}.fa",
+    output:
+        "res/hifiasm/bams/{interval}_{individual}_h{hap}.bam",
+    log:
+        "logs/map_back_to_ref/{interval}_{individual}_h{hap}.log",
+    conda:
+        "triopullenv.yaml"
+    params:
+        threads=config["minimap2_threads"],
+        ref_fa=config["ref_t2t_fa"],
+    shell:
+        """
+        minimap2 -x asm5 -a -N 0 -t {params.threads} {params.ref_fa} {input.asm_fa} | samtools sort - > {output}
+        """
+
+
+rule gzip_vcf:
+    input:
+        "{foo}.vcf",
+    output:
+        "{foo}.vcf.gz",
+    conda:
+        "triopullenv.yaml"
+    shell:
+        """
+        bcftools view -Oz {input} > {output}
+        """
+
+
+rule index_vcf_gz:
+    input:
+        "{foo}.vcf.gz",
+    output:
+        "{foo}.vcf.gz.tbi",
+    conda:
+        "triopullenv.yaml"
+    shell:
+        """
+        tabix -p vcf {input}
+        """
+
+
+rule index_bam:
+    input:
+        "{foo}.bam",
+    output:
+        "{foo}.bam.bai",
+    conda:
+        "triopullenv.yaml"
+    shell:
+        """ 
+        samtools index {input}
+        """
