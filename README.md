@@ -18,7 +18,10 @@ conda activate triopullenv
 
 # Testrun
 
-Run a testrun on one de-novo deletion in GIAB which is included with this pipeline. FOr your own data, just exchange the interval and bam parameters. 
+Run a testrun on one de-novo deletion in GIAB which is included with this pipeline using the following code. For your own data, just exchange the interval and bam parameters. 
+
+Note that the bam files must be sorted and indexed (using e.g. samtools index file.bam)
+
 
 ```
 snakemake --config interval='chr7:142700000-142900000' \
