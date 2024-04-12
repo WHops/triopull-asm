@@ -1,3 +1,6 @@
+startup_msg = 'Starting the Triopull pipeline to create local assemblies and align those to the specified reference'
+sys.stderr.write(startup_msg)
+
 configfile: "config/Snake.config.json"
 
 # Dictionary to map individual roles to their BAM files
@@ -19,7 +22,7 @@ rule all:
     input:
         expand(
             "res/hifiasm/bams/{interval}_{individual}_h{hap}.bam.bai",
-            interval=INTERVAL,
+            interval=INTERVALS,
             individual=["mother", "father", "child"],
             hap=[1, 2],
         ),
@@ -69,6 +72,8 @@ rule assemble_child_trio:
 rule assemble_parent_single:
     input:
         reads="res/pulled_reads_fastq/{interval}_{parent}.fastq",
+        h1_reads="res/readlists_parents/{interval}_{parent}_h1.txt",
+        h2_reads="res/readlists_parents/{interval}_{parent}_h2.txt",
     output:
         "res/hifiasm/{interval}_{parent}_asm_completed.txt",
     log:
@@ -82,7 +87,7 @@ rule assemble_parent_single:
         parent="mother|father",
     shell:
         """
-        hifiasm -o {params.prefix} -t {params.threads} -D 50 -N 200 {input.reads}
+        hifiasm -o {params.prefix} -t {params.threads} -3 {input.h1_reads} -4 {input.h2_reads} -D 50 -N 200 {input.reads}
         touch {output}
         """
 
@@ -119,7 +124,7 @@ rule gfa_to_fa:
             hap=wildcards.hap,
             interval=wildcards.interval,
             individual=wildcards.individual,
-            mode=("dip" if wildcards.individual == "child" else "bp"),
+            mode=("dip" if wildcards.individual == "child" else "dip"),
         ),
     shell:
         """
@@ -137,8 +142,8 @@ rule map_back_to_ref:
     conda:
         "triopullenv.yaml"
     params:
-        threads=4,
-        ref_fa=config["ref_fa"],
+        threads=config["minimap2_threads"],
+        ref_fa=config["ref_t2t_fa"],
     shell:
         """
         minimap2 -x asm5 -a -N 0 -t {params.threads} {params.ref_fa} {input.asm_fa} | samtools sort - > {output}

@@ -12,8 +12,7 @@ Install dependencies using
 git clone triopull-asm
 cd triopull-asm
 
-mamba env create --file triopullenv.yaml
-conda activate triopullenv
+mamba env create --file workflow/triopullenv.yaml
 ```
 
 # Testrun
@@ -22,13 +21,15 @@ Run a testrun on one de-novo deletion in GIAB which is included with this pipeli
 
 Note that the bam files must be sorted and indexed (using e.g. samtools index file.bam)
 
-
 ```
-snakemake --config interval='chr7:142700000-142900000' \
-child_bam='example/HG002_subset.bam' \
-father_bam='example/HG003_subset.bam' \
-mother_bam='example/HG004_subset.bam' \
---cores 8
+conda activate triopullenv
+
+snakemake -- cores 8 --config interval='chr7:142700000-142900000' \
+                                        ref_fa='example/hg38_chr7_subset.bam' \
+                                        child_bam='example/HG002_subset.bam' \
+                                        father_bam='example/HG003_subset.bam' \
+                                        mother_bam='example/HG004_subset.bam' \
+          
 ```
 
 
