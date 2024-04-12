@@ -12,7 +12,7 @@ Install dependencies using
 git clone triopull-asm
 cd triopull-asm
 
-mamba env create --file triopullenv.yml
+mamba env create --file triopullenv.yaml
 conda activate triopullenv
 ```
 
