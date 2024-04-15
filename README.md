@@ -2,7 +2,7 @@
 
 Triopull-asm is a snakemake workflow which accepts a bam-triplet and coordinates, and creates a child trio-asm and parents single-asm of that region by pulling the reads out of them bam file, converting to fastq and invoking hifiasm. 
 
-Note that this is only useful in simple cases where unmapped reads are unlikely. 
+Note that this is only useful in simple cases where unmapped reads are unlikely. Recommended minimum size for the assembly is around ~1Mbp (Fewer input reads can make it hard for hifiasm to determine the coverage peaks (het/hom)).
 
 # Installation
 
