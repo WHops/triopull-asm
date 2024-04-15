@@ -24,7 +24,7 @@ Note that the bam files must be sorted and indexed (using e.g. samtools index fi
 ```
 conda activate triopullenv
 
-snakemake -- cores 8 --config interval='chr7:142700000-142900000' \
+snakemake --cores 8 --config interval='chr7:142700000-142900000' \
                                         ref_fa='example/hg38_chr7_subset.bam' \
                                         child_bam='example/HG002_subset.bam' \
                                         father_bam='example/HG003_subset.bam' \
